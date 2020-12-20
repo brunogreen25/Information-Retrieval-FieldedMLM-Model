@@ -135,7 +135,7 @@ def display_query_results(result_tuples):
 
 # Hyperparameters window
 def hyperparam_button_click(event):
-    global check_var
+    global selected_method
 
     hyperparam_window = Tk()
     hyperparam_window.title("Hyperparameters")
@@ -224,7 +224,7 @@ def hyperparam_button_click(event):
         global selected_method
         print(event)
         selected_method = event
-    option_menu = OptionMenu(hyperparam_window, selected_variable, EvaluationMethods.PrecisionK.value, EvaluationMethods.MAP.value, EvaluationMethods.MRR.value, command=changed_value)
+    option_menu = OptionMenu(hyperparam_window, selected_variable, EvaluationMethods.PrecisionK.value, EvaluationMethods.MAP.value, EvaluationMethods.MRR.value, EvaluationMethods.NDCG.value, command=changed_value)
     option_menu.grid(row=1, column=fields_num+2)
 
     Label(hyperparam_window, text="K:").grid(row=2, column=fields_num + 1)

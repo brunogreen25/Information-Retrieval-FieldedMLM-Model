@@ -77,8 +77,50 @@ class Evaluation:
             return self.map_eval()
         elif self.method == EvaluationMethods.MRR.value:
             return self.mrr_eval()
+        elif self.method == EvaluationMethods.NDCG.value:
+            return self.ndcg_eval()
         else:
             raise Exception("Requested evaluation method is not implemented in the system.")
+
+    def ndcg_eval(self):
+        ndcg_avg = 0
+        k = int(self.k)
+
+        def calc_log_series(start, n):
+            sum = 0
+            for i in range(start, n):
+                sum += 1 / np.log2(i)
+            return sum
+
+        for topic_number in range(1, len(self.question_dict) + 1):
+            ndcg = 0
+            question = self.question_dict[str(topic_number)]
+            results = self.my_search.search(question, k)
+
+            num_of_twos = len(self.labels[str(topic_number)]['2'])
+            num_of_ones = len(self.labels[str(topic_number)]['1'])
+
+            ideal = 2 + 2 * calc_log_series(2, num_of_twos-1) + 1 * calc_log_series(num_of_twos+1, num_of_ones)
+
+            for i, result in enumerate(results):
+                cord_id = result[0]
+
+                if cord_id in self.labels[str(topic_number)]['1']:
+                    ndcg += 1 if i==0 else 1/np.log2(i+1)
+                if cord_id in self.labels[str(topic_number)]['2']:
+                    ndcg += 2 if i==0 else 2/np.log2(i+1)
+
+            ndcg /= ideal
+            ndcg_avg += ndcg
+            print("Answered for question=" + str(topic_number) + ", current ndcg="+str(ndcg))
+
+        ndcg_avg /= len(self.question_dict)
+        score = round(ndcg_avg, 3)
+        score = (score, score)
+        print(score)
+        Evaluation.print_results_one_line(self.test_id, score, self.k, 'ndcg')
+        return score
+
 
     # Not entire conf matrix, does not calculate TN
     def calculate_confusion_matrix(self, k, topic_number):
@@ -193,8 +235,8 @@ class Evaluation:
                 if k==1 or recs[-2][1] < recs[-1][1]:
                     scores_part_relevant.append(precs[-1][1])
 
-            ap_socre_relevant += sum(scores_relevant) / len(self.labels[self.topic_number]['2'])
-            ap_score_part_relevant += sum(scores_part_relevant) / len(self.labels[self.topic_number]['1'] + self.labels[self.topic_number]['2'])
+            ap_socre_relevant += sum(scores_relevant) / len(self.labels[str(topic_number)]['2'])
+            ap_score_part_relevant += sum(scores_part_relevant) / len(self.labels[str(topic_number)]['1'] + self.labels[str(topic_number)]['2'])
 
         score = (round(ap_socre_relevant, 3), round(ap_score_part_relevant, 3))
         print(score)
@@ -240,3 +282,4 @@ class EvaluationMethods(enum.Enum):
     PrecisionK = 'Precision_K'
     MAP = 'MAP'
     MRR = 'MRR'
+    NDCG = 'NDCG'
