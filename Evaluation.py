@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pylab import figure
 import os
+import math
 
 class Evaluation:
 
@@ -21,6 +22,7 @@ class Evaluation:
         self.question_dict = Evaluation.read_xml(settings.path_to_topics_xml)
         # WRITTEN AS:
         #   topic_number : question_string
+        self.results = []
 
     # region DOCUMENT_PARSING
     @staticmethod
@@ -122,6 +124,7 @@ class Evaluation:
         return score
 
 
+
     # Not entire conf matrix, does not calculate TN
     def calculate_confusion_matrix(self, k, topic_number):
         question = self.question_dict[str(topic_number)]
@@ -176,8 +179,7 @@ class Evaluation:
         prec_relevant = conf_matrix[0][0] / (conf_matrix[0][0] + conf_matrix[2][0])
         prec_part_relevant = conf_matrix[0][1] / (conf_matrix[0][1] + conf_matrix[2][1])
 
-        return (prec_relevant, prec_part_relevant)
-
+        return (round(prec_relevant, 3), round(prec_part_relevant, 3))
 
     def all_precision_k_eval(self):
         max_topic_number = len(self.question_dict)
@@ -205,9 +207,48 @@ class Evaluation:
     def recall_k_eval(self, k, topic_number):
         conf_matrix = self.calculate_confusion_matrix(k, topic_number)
         recall_relevant = conf_matrix[0][0] / (conf_matrix[0][0] + conf_matrix[1][0])
-        recall_part_relevant = conf_matrix[0][0] / (conf_matrix[0][0] + conf_matrix[1][0])
+        recall_part_relevant = conf_matrix[0][1] / (conf_matrix[0][1] + conf_matrix[1][1])
 
-        return (round(recall_relevant,3), round(recall_part_relevant,3))
+        return (round(recall_relevant, 5), round(recall_part_relevant, 5))
+
+    @staticmethod
+    def new_confusion_matrix(results, labels_1, labels_2):
+        TP_relevant = 0
+        TP_part_relevant = 0
+        FP_relevant = 0
+        FP_part_relevant = 0
+
+        for result in results:
+            if result[0] in labels_2:
+                TP_relevant += 1
+            else:
+                FP_relevant += 1
+
+            if result[0] in labels_1 or result[0] in labels_2:
+                TP_part_relevant += 1
+            else:
+                FP_part_relevant += 1
+
+        FN_relevant = len(labels_2) - TP_relevant
+        FN_part_relevant = len(labels_1) + len(labels_2) - TP_part_relevant
+
+        conf_matrix = np.array(
+            [[TP_relevant, TP_part_relevant], [FN_relevant, FN_part_relevant], [FP_relevant, FP_part_relevant]])
+        return conf_matrix
+
+    @staticmethod
+    def new_precision(conf_matrix):
+        prec_relevant = conf_matrix[0][0] / (conf_matrix[0][0] + conf_matrix[2][0])
+        prec_part_relevant = conf_matrix[0][1] / (conf_matrix[0][1] + conf_matrix[2][1])
+
+        return (round(prec_relevant, 3), round(prec_part_relevant, 3))
+
+    @staticmethod
+    def new_recall(conf_matrix):
+        recall_relevant = conf_matrix[0][0] / (conf_matrix[0][0] + conf_matrix[1][0])
+        recall_part_relevant = conf_matrix[0][1] / (conf_matrix[0][1] + conf_matrix[1][1])
+
+        return (round(recall_relevant, 5), round(recall_part_relevant, 5))
 
     def map_eval(self):
         ap_socre_relevant = 0
@@ -219,16 +260,21 @@ class Evaluation:
             scores_relevant = list()
             scores_part_relevant = list()
 
+            labels_2 = self.labels[str(topic_number)]['2']
+            labels_1 = self.labels[str(topic_number)]['1']
+
+            results = self.my_search.search(self.question_dict[str(topic_number)], self.k) if self.k != -1 else self.my_search.search(question)
+
             for k in range(1, self.k+1):
+                conf_matrix = Evaluation.new_confusion_matrix(results[:k], labels_1, labels_2)
+
                 # Precision
-                prec = self.precision_k_eval(k, topic_number)
+                prec = Evaluation.new_precision(conf_matrix)
                 precs.append(prec)
 
                 # Recall
-                rec = self.recall_k_eval(k, topic_number)
+                rec = Evaluation.new_recall(conf_matrix)
                 recs.append(rec)
-
-                print("Answered for question=" + str(topic_number) + ' and k=' + str(k))
 
                 if k==1 or recs[-2][0] < recs[-1][0]:
                     scores_relevant.append(precs[-1][0])
@@ -237,6 +283,11 @@ class Evaluation:
 
             ap_socre_relevant += sum(scores_relevant) / len(self.labels[str(topic_number)]['2'])
             ap_score_part_relevant += sum(scores_part_relevant) / len(self.labels[str(topic_number)]['1'] + self.labels[str(topic_number)]['2'])
+
+            print("Answered for question=" + str(topic_number))
+
+        ap_socre_relevant /= len(self.question_dict)
+        ap_score_part_relevant  /= len(self.question_dict)
 
         score = (round(ap_socre_relevant, 3), round(ap_score_part_relevant, 3))
         print(score)
